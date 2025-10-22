@@ -1,11 +1,10 @@
-"""Analysis service for contract summarization and risk detection."""
+"""Analysis service for contract summarization and risk detection using CrewAI."""
 import json
 from datetime import datetime
 from pathlib import Path
 
-from config import get_openai_client, get_settings
+from agents import analyze_contract
 from schemas import AnalysisResponse
-
 
 async def analyze_session(session_id: str, base_path: str) -> AnalysisResponse:
     """
@@ -33,8 +32,8 @@ async def analyze_session(session_id: str, base_path: str) -> AnalysisResponse:
     stt_text = stt_path.read_text(encoding="utf-8") if stt_path.exists() else ""
     ocr_text = ocr_path.read_text(encoding="utf-8") if ocr_path.exists() else ""
 
-    # Generate summary
-    summary = await _summarize_content(stt_text, ocr_text)
+    # Generate summary using CrewAI agents
+    summary = analyze_contract(stt_text, ocr_text)
 
     # Create analysis result
     result = AnalysisResponse(
@@ -51,33 +50,3 @@ async def analyze_session(session_id: str, base_path: str) -> AnalysisResponse:
         json.dump(result.model_dump(), f, ensure_ascii=False, indent=2, default=str)
 
     return result
-
-
-async def _summarize_content(stt_text: str, ocr_text: str) -> str:
-    """
-    Generate AI summary of combined STT and OCR content.
-
-    Args:
-        stt_text: Transcribed speech text
-        ocr_text: Extracted document text
-
-    Returns:
-        AI-generated summary
-    """
-    settings = get_settings()
-    client = get_openai_client()
-
-    combined_text = f"[음성 대화]\n{stt_text}\n\n[문서 내용]\n{ocr_text}"
-
-    response = client.chat.completions.create(
-        model=settings.openai_model_name,
-        messages=[
-            {
-                "role": "system",
-                "content": "당신은 계약서와 대화 내용을 요약하는 전문가입니다. 핵심 내용을 간결하게 요약하세요.",
-            },
-            {"role": "user", "content": f"다음 내용을 요약해주세요:\n\n{combined_text}"},
-        ],
-    )
-
-    return response.choices[0].message.content.strip()
